@@ -144,7 +144,7 @@ export function useTasks(): UseTasksState {
   const clearLastDeleted = useCallback(() => {
   setLastDeleted(null);
 }, []);
-  return { tasks, loading, error, derivedSorted, metrics, lastDeleted, addTask, updateTask, deleteTask, undoDelete, clearLastDeleted };
+  return { tasks, loading, error, derivedSorted, metrics, lastDeleted, addTask, updateTask, deleteTask, undoDelete, clearLastDeleted,};
 }
 
 

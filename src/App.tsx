@@ -19,20 +19,53 @@ import {
 } from '@/utils/logic';
 
 function AppContent() {
-  const { loading, error, metrics, derivedSorted, addTask, updateTask, deleteTask, undoDelete, lastDeleted } = useTasksContext();
-  const handleCloseUndo = () => {};
+  // Extract tasks + undo functions from TasksContext
+  const {
+    loading,
+    error,
+    metrics,
+    derivedSorted,
+    addTask,
+    updateTask,
+    deleteTask,
+    undoDelete,
+    lastDeleted,
+    clearLastDeleted, // ✅ added for UndoSnackbar
+  } = useTasksContext();
+
+  // Snackbar handlers
+  const handleUndo = useCallback(() => {
+    undoDelete();
+  }, [undoDelete]);
+
+  const handleCloseUndo = useCallback(() => {
+    clearLastDeleted(); // Reset lastDeleted when snackbar closes
+  }, [clearLastDeleted]);
+
+  // Filters & search
   const [q, setQ] = useState('');
   const [fStatus, setFStatus] = useState<string>('All');
   const [fPriority, setFPriority] = useState<string>('All');
-  const { user } = useUser();
-  const [activity, setActivity] = useState<ActivityItem[]>([]);
-  const createActivity = useCallback((type: ActivityItem['type'], summary: string): ActivityItem => ({
-    id: (typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`),
-    ts: Date.now(),
-    type,
-    summary,
-  }), []);
 
+  // User info
+  const { user } = useUser();
+
+  // Activity log
+  const [activity, setActivity] = useState<ActivityItem[]>([]);
+  const createActivity = useCallback(
+    (type: ActivityItem['type'], summary: string): ActivityItem => ({
+      id:
+        typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      ts: Date.now(),
+      type,
+      summary,
+    }),
+    []
+  );
+
+  // Filtered tasks
   const filtered = useMemo(() => {
     return derivedSorted.filter(t => {
       if (q && !t.title.toLowerCase().includes(q.toLowerCase())) return false;
@@ -42,26 +75,39 @@ function AppContent() {
     });
   }, [derivedSorted, q, fStatus, fPriority]);
 
-  const handleAdd = useCallback((payload: Omit<Task, 'id'>) => {
-    addTask(payload);
-    setActivity(prev => [createActivity('add', `Added: ${payload.title}`), ...prev].slice(0, 50));
-  }, [addTask, createActivity]);
-  const handleUpdate = useCallback((id: string, patch: Partial<Task>) => {
-    updateTask(id, patch);
-    setActivity(prev => [createActivity('update', `Updated: ${Object.keys(patch).join(', ')}`), ...prev].slice(0, 50));
-  }, [updateTask, createActivity]);
-  const handleDelete = useCallback((id: string) => {
-    deleteTask(id);
-    setActivity(prev => [createActivity('delete', `Deleted task ${id}`), ...prev].slice(0, 50));
-  }, [deleteTask, createActivity]);
-  const handleUndo = useCallback(() => {
-    undoDelete();
-    setActivity(prev => [createActivity('undo', 'Undo delete'), ...prev].slice(0, 50));
-  }, [undoDelete, createActivity]);
+  // Task CRUD handlers
+  const handleAdd = useCallback(
+    (payload: Omit<Task, 'id'>) => {
+      addTask(payload);
+      setActivity(prev => [createActivity('add', `Added: ${payload.title}`), ...prev].slice(0, 50));
+    },
+    [addTask, createActivity]
+  );
+
+  const handleUpdate = useCallback(
+    (id: string, patch: Partial<Task>) => {
+      updateTask(id, patch);
+      setActivity(prev => [
+        createActivity('update', `Updated: ${Object.keys(patch).join(', ')}`),
+        ...prev,
+      ].slice(0, 50));
+    },
+    [updateTask, createActivity]
+  );
+
+  const handleDelete = useCallback(
+    (id: string) => {
+      deleteTask(id);
+      setActivity(prev => [createActivity('delete', `Deleted task ${id}`), ...prev].slice(0, 50));
+    },
+    [deleteTask, createActivity]
+  );
+
   return (
     <Box sx={{ minHeight: '100dvh', bgcolor: 'background.default' }}>
       <Container maxWidth="lg" sx={{ py: { xs: 3, md: 5 } }}>
         <Stack spacing={3}>
+          {/* Header */}
           <Stack direction="row" alignItems="center" justifyContent="space-between">
             <Box>
               <Typography variant="h3" fontWeight={700} gutterBottom>
@@ -72,19 +118,28 @@ function AppContent() {
               </Typography>
             </Box>
             <Stack direction="row" spacing={2} alignItems="center">
-              <Button variant="outlined" onClick={() => {
-                const csv = toCSV(filtered);
-                downloadCSV('tasks.csv', csv);
-              }}>Export CSV</Button>
+              <Button
+                variant="outlined"
+                onClick={() => {
+                  const csv = toCSV(filtered);
+                  downloadCSV('tasks.csv', csv);
+                }}
+              >
+                Export CSV
+              </Button>
               <Avatar sx={{ width: 40, height: 40 }}>{user.name.charAt(0)}</Avatar>
             </Stack>
           </Stack>
+
+          {/* Loading / Error */}
           {loading && (
             <Stack alignItems="center" py={6}>
               <CircularProgress />
             </Stack>
           )}
           {error && <Alert severity="error">{error}</Alert>}
+
+          {/* Metrics */}
           {!loading && !error && (
             <MetricsBar
               metricsOverride={{
@@ -97,6 +152,8 @@ function AppContent() {
               }}
             />
           )}
+
+          {/* Filters */}
           {!loading && !error && (
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
               <TextField placeholder="Search by title" value={q} onChange={e => setQ(e.target.value)} fullWidth />
@@ -112,27 +169,33 @@ function AppContent() {
                 <MenuItem value="Medium">Medium</MenuItem>
                 <MenuItem value="Low">Low</MenuItem>
               </Select>
-
             </Stack>
           )}
+
+          {/* Task Table */}
           {!loading && !error && (
-            <TaskTable
-              tasks={filtered}
-              onAdd={handleAdd}
-              onUpdate={handleUpdate}
-              onDelete={handleDelete}
-            />
+            <TaskTable tasks={filtered} onAdd={handleAdd} onUpdate={handleUpdate} onDelete={handleDelete} />
           )}
+
+          {/* Charts / Dashboards */}
           {!loading && !error && <ChartsDashboard tasks={filtered} />}
           {!loading && !error && <AnalyticsDashboard tasks={filtered} />}
           {!loading && !error && <ActivityLog items={activity} />}
-          <UndoSnackbar open={!!lastDeleted} onClose={handleCloseUndo} onUndo={handleUndo} />
-         </Stack>
+
+          {/* Undo Snackbar */}
+          <UndoSnackbar
+            open={!!lastDeleted}
+            onClose={handleCloseUndo}
+            onUndo={handleUndo}
+            onClear={clearLastDeleted} // ✅ fixes TS error & bug
+          />
+        </Stack>
       </Container>
     </Box>
   );
 }
 
+// App with context providers
 export default function App() {
   return (
     <UserProvider>
@@ -142,5 +205,3 @@ export default function App() {
     </UserProvider>
   );
 }
-
-
