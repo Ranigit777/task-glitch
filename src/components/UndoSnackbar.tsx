@@ -4,33 +4,25 @@ interface Props {
   open: boolean;
   onClose: () => void;
   onUndo: () => void;
-  onClear: () => void; // 🔥 ADD THIS
+  onClear: () => void; // ✅ add this
 }
-
 
 export default function UndoSnackbar({ open, onClose, onUndo, onClear }: Props) {
+  const handleClose = (_event?: unknown, reason?: string) => {
+
+    if (reason === 'clickaway') return;
+    onClose();
+    onClear(); // ✅ reset lastDeleted after snackbar closes
+  };
+
   return (
     <Snackbar
-  open={open}
-  onClose={() => {
-    onClose();
-    onClear(); // ✅ reset lastDeleted
-  }}
-  autoHideDuration={4000}
-  message="Task deleted"
-  action={
-    <Button
-      color="secondary"
-      size="small"
-      onClick={onUndo}
-    >
-      Undo
-    </Button>
-  }
-  anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-/>
-
+      open={open}
+      onClose={handleClose}
+      autoHideDuration={4000}
+      message="Task deleted"
+      action={<Button color="secondary" size="small" onClick={onUndo}>Undo</Button>}
+      anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+    />
   );
 }
-
-
