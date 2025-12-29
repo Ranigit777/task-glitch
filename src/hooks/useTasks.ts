@@ -23,6 +23,7 @@ interface UseTasksState {
   updateTask: (id: string, patch: Partial<Task>) => void;
   deleteTask: (id: string) => void;
   undoDelete: () => void;
+  clearLastDeleted: () => void;
 }
 
 const INITIAL_METRICS: Metrics = {
@@ -83,38 +84,7 @@ export function useTasks(): UseTasksState {
   }
 
   // Initial load: public JSON -> fallback generated dummy (validated)
-  useEffect(() => {
-  if (fetchedRef.current) return;   // 🔒 guard
-  fetchedRef.current = true;
-
-  let isMounted = true;
-
-  async function load() {
-    try {
-      console.log("Fetching tasks once...");
-      const res = await fetch('/tasks.json');
-      if (!res.ok) throw new Error(`Failed to load tasks.json (${res.status})`);
-      const data = (await res.json()) as any[];
-      const normalized: Task[] = normalizeTasks(data);
-      const fallback = generateSalesTasks(50);
-      const finalData = sanitizeTasks(normalized.length > 0 ? normalized : fallback);
-      if (isMounted) setTasks(finalData);
-    } catch (e: any) {
-      if (isMounted) setError(e?.message ?? 'Failed to load tasks');
-    } finally {
-      if (isMounted) {
-        setLoading(false);
-      }
-    }
-  }
-
-  load();
-
-  return () => {
-    isMounted = false;
-  };
-}, []);
-
+  
 
   const derivedSorted = useMemo<DerivedTask[]>(() => {
     const withRoi = tasks.map(withDerived);
@@ -171,8 +141,10 @@ export function useTasks(): UseTasksState {
     setTasks(prev => [...prev, lastDeleted]);
     setLastDeleted(null);
   }, [lastDeleted]);
-
-  return { tasks, loading, error, derivedSorted, metrics, lastDeleted, addTask, updateTask, deleteTask, undoDelete };
+  const clearLastDeleted = useCallback(() => {
+  setLastDeleted(null);
+}, []);
+  return { tasks, loading, error, derivedSorted, metrics, lastDeleted, addTask, updateTask, deleteTask, undoDelete, clearLastDeleted };
 }
 
 
