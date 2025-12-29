@@ -41,10 +41,11 @@ export function sortTasks(tasks: DerivedTask[]) {
       priorityOrder[b.priority] - priorityOrder[a.priority];
     if (priorityDiff !== 0) return priorityDiff;
 
-    // 3️⃣ FINAL TIE-BREAKER (stable)
+    // 3️⃣ Stable tie-breaker
     return a.title.localeCompare(b.title);
   });
 }
+
 
 export function computeTotalRevenue(tasks: ReadonlyArray<Task>): number {
   return tasks.filter(t => t.status === 'Done').reduce((sum, t) => sum + t.revenue, 0);
@@ -66,13 +67,24 @@ export function computeRevenuePerHour(tasks: ReadonlyArray<Task>): number {
   return time > 0 ? revenue / time : 0;
 }
 
-export function computeAverageROI(tasks: ReadonlyArray<Task>): number {
-  const rois = tasks
-    .map(t => computeROI(t.revenue, t.timeTaken))
-    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
-  if (rois.length === 0) return 0;
-  return rois.reduce((s, r) => s + r, 0) / rois.length;
+export function computeAverageROI(tasks: Task[]): number {
+  if (tasks.length === 0) return 0;
+
+  const validROIs = tasks
+    .map(t => {
+      const revenue = Number(t.revenue);
+      const time = Number(t.timeTaken);
+      return time > 0 && revenue > 0 ? revenue / time : 0;
+    })
+    .filter(r => Number.isFinite(r));
+
+  if (validROIs.length === 0) return 0;
+
+  return Number(
+    (validROIs.reduce((a, b) => a + b, 0) / validROIs.length).toFixed(2)
+  );
 }
+
 
 export function computePerformanceGrade(avgROI: number): 'Excellent' | 'Good' | 'Needs Improvement' {
   if (avgROI > 500) return 'Excellent';
