@@ -60,58 +60,61 @@ export function useTasks(): UseTasksState {
     });
   }
 
-  // Initial load: public JSON -> fallback generated dummy
+  function sanitizeTasks(input: any[]): Task[] {
+    const seen = new Set<string>();
+    return (Array.isArray(input) ? input : []).map((t, idx) => {
+      const id = typeof t?.id === 'string' && t.id ? t.id : crypto?.randomUUID?.() ?? `task-${Date.now()}-${idx}`;
+      const title = typeof t?.title === 'string' && t.title.trim() ? t.title.trim() : `Untitled ${idx + 1}`;
+      const revenue = Number.isFinite(Number(t?.revenue)) ? Number(t.revenue) : 0;
+      const timeTaken = Number(t?.timeTaken) > 0 ? Number(t.timeTaken) : 1;
+      const priority = ['High', 'Medium', 'Low'].includes(t?.priority) ? (t.priority as Task['priority']) : 'Medium';
+      const status = ['Todo', 'In Progress', 'Done'].includes(t?.status) ? (t.status as Task['status']) : 'Todo';
+      const notes = typeof t?.notes === 'string' && t.notes.trim() ? t.notes.trim() : undefined;
+      const createdAt = t?.createdAt ? new Date(t.createdAt).toISOString() : new Date().toISOString();
+      const completedAt = t?.completedAt ? new Date(t.completedAt).toISOString() : status === 'Done' ? new Date(createdAt).toISOString() : undefined;
+      // ensure unique id
+      let finalId = id;
+      if (seen.has(finalId)) {
+        finalId = crypto?.randomUUID?.() ?? `${finalId}-${Math.random().toString(36).slice(2, 8)}`;
+      }
+      seen.add(finalId);
+      return { id: finalId, title, revenue, timeTaken, priority, status, notes, createdAt, completedAt } as Task;
+    });
+  }
+
+  // Initial load: public JSON -> fallback generated dummy (validated)
   useEffect(() => {
-    let isMounted = true;
-    async function load() {
-      try {
-        const res = await fetch('/tasks.json');
-        if (!res.ok) throw new Error(`Failed to load tasks.json (${res.status})`);
-        const data = (await res.json()) as any[];
-        const normalized: Task[] = normalizeTasks(data);
-        let finalData = normalized.length > 0 ? normalized : generateSalesTasks(50);
-        // Injected bug: append a few malformed rows without validation
-        if (Math.random() < 0.5) {
-          finalData = [
-            ...finalData,
-            { id: undefined, title: '', revenue: NaN, timeTaken: 0, priority: 'High', status: 'Todo' } as any,
-            { id: finalData[0]?.id ?? 'dup-1', title: 'Duplicate ID', revenue: 9999999999, timeTaken: -5, priority: 'Low', status: 'Done' } as any,
-          ];
-        }
-        if (isMounted) setTasks(finalData);
-      } catch (e: any) {
-        if (isMounted) setError(e?.message ?? 'Failed to load tasks');
-      } finally {
-        if (isMounted) {
-          setLoading(false);
-          fetchedRef.current = true;
-        }
+  if (fetchedRef.current) return;   // 🔒 guard
+  fetchedRef.current = true;
+
+  let isMounted = true;
+
+  async function load() {
+    try {
+      console.log("Fetching tasks once...");
+      const res = await fetch('/tasks.json');
+      if (!res.ok) throw new Error(`Failed to load tasks.json (${res.status})`);
+      const data = (await res.json()) as any[];
+      const normalized: Task[] = normalizeTasks(data);
+      const fallback = generateSalesTasks(50);
+      const finalData = sanitizeTasks(normalized.length > 0 ? normalized : fallback);
+      if (isMounted) setTasks(finalData);
+    } catch (e: any) {
+      if (isMounted) setError(e?.message ?? 'Failed to load tasks');
+    } finally {
+      if (isMounted) {
+        setLoading(false);
       }
     }
-    load();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+  }
 
-  // Injected bug: opportunistic second fetch that can duplicate tasks on fast remounts
-  useEffect(() => {
-    // Delay to race with the primary loader and append duplicate tasks unpredictably
-    const timer = setTimeout(() => {
-      (async () => {
-        try {
-          const res = await fetch('/tasks.json');
-          if (!res.ok) return;
-          const data = (await res.json()) as any[];
-          const normalized = normalizeTasks(data);
-          setTasks(prev => [...prev, ...normalized]);
-        } catch {
-          // ignore
-        }
-      })();
-    }, 0);
-    return () => clearTimeout(timer);
-  }, []);
+  load();
+
+  return () => {
+    isMounted = false;
+  };
+}, []);
+
 
   const derivedSorted = useMemo<DerivedTask[]>(() => {
     const withRoi = tasks.map(withDerived);
