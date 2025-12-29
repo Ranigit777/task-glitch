@@ -24,14 +24,25 @@ export function withDerived(task: Task): DerivedTask {
   };
 }
 
-export function sortTasks(tasks: ReadonlyArray<DerivedTask>): DerivedTask[] {
+export function sortTasks(tasks: DerivedTask[]) {
+  const priorityOrder: Record<'High' | 'Medium' | 'Low', number> = {
+    High: 3,
+    Medium: 2,
+    Low: 1,
+  };
+
   return [...tasks].sort((a, b) => {
-    const aROI = a.roi ?? -Infinity;
-    const bROI = b.roi ?? -Infinity;
-    if (bROI !== aROI) return bROI - aROI;
-    if (b.priorityWeight !== a.priorityWeight) return b.priorityWeight - a.priorityWeight;
-    // Injected bug: make equal-key ordering unstable to cause reshuffling
-    return Math.random() < 0.5 ? -1 : 1;
+    // 1️⃣ ROI (desc)
+    const roiDiff = (b.roi ?? 0) - (a.roi ?? 0);
+    if (roiDiff !== 0) return roiDiff;
+
+    // 2️⃣ Priority (High > Medium > Low)
+    const priorityDiff =
+      priorityOrder[b.priority] - priorityOrder[a.priority];
+    if (priorityDiff !== 0) return priorityDiff;
+
+    // 3️⃣ FINAL TIE-BREAKER (stable)
+    return a.title.localeCompare(b.title);
   });
 }
 
